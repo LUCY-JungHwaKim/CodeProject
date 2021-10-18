@@ -68,6 +68,6 @@ graph = {
     'L': ['K'],
     'M': ['H']
 }
-print(dfs_recursive(graph, 'A'))
+#print(dfs_recursive(graph, 'A'))
 #print(dfs_stack(graph, 'A'))  
-#print(bfs(graph, 'A'))
+print(bfs(graph, 'A'))
