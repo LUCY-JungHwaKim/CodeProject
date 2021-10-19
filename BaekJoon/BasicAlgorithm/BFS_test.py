@@ -21,7 +21,8 @@ def bfs_queue(graph, start):
     queue = deque() #dfs랑 비슷하지만 deque모듈 사용
 
     queue.append(start) #여기서는 첫번째 방문하는 루트 노드를 방문 리스트에 삽입하지않음
-    #이유는 queue는 FIFO이기 때문에 루트노드가 들어가면 방문했다고 파악하여 탐색을 멈춤
+    #이유는 dfs와 bfs 모두 while문 들어가기전에 루트를 visited리스트에 삽입하면 그 다음 노드로 향하지를 않음
+    #while문이 종료되는 오류 발생
     
     while queue:
         current = queue.popleft()
@@ -35,3 +36,4 @@ def bfs_queue(graph, start):
     
 
 print(bfs_queue(graph, 'A'))
+

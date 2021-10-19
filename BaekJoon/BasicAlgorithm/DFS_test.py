@@ -43,7 +43,6 @@ def dfs_recursive(graph, start):
     recursive_visit[start] = True
 
     for node in graph[start]:   #재귀 호출
-        print(node)
         dfs_recursive(graph, node)
     
 
