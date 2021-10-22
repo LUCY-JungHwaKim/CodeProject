@@ -38,6 +38,7 @@ for x in range(N**2):   #좋아하는사람 입력받을때마다 계산할 수 
                     max_y = j
                     max_like = like_cnt
                     max_empty = empty_cnt
+                    
     map_ary[max_x][max_y] = num_ary[0]
 cnt_ary = [[0 for col in range(N)] for row in range(N)]
 total_score = 0                        
