@@ -28,4 +28,4 @@ while True:
 
 for i in range(len(prime_list)):
     print(prime_list[i])
-    
+        
