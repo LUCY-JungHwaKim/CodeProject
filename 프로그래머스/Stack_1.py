@@ -1,6 +1,7 @@
 import math
 from collections import deque
-
+#기능개발
+#https://programmers.co.kr/learn/courses/30/lessons/42586?language=python3
 def solution(progresses, speeds):
     answer = [0 for _ in range(len(progresses))]
     work = deque()
