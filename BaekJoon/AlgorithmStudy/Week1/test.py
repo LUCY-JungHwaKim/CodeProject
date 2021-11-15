@@ -126,7 +126,15 @@
 #     print("Case #" + str(i+1) + ": " + str(first_num[i]) + " + " + str(second_num[i]) + " = " + str(sum_ary[i]))
 
 
-a = int(input())
-for i in range(a-1, -1, -1):
-    print(" "*i, end='')
-    print("*"*(a-i))
+# a = int(input())
+# for i in range(a-1, -1, -1):
+#     print(" "*i, end='')
+#     print("*"*(a-i))
+
+a,b = map(int, input().split())
+
+num_ary = list(map(int, input().split()))
+
+for i in range(a):
+    if num_ary[i] < b:
+        print(num_ary[i], end=" ")
