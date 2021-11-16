@@ -34,6 +34,7 @@ def dfs_stack(graph, start):
 
 
 
+
 recursive_visit = {}    #재귀 함수를 호출하니깐 재귀함수의 visited행렬은 함수 외부에 선언
 def dfs_recursive(graph, start):
 
