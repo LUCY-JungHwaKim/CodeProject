@@ -1,21 +1,18 @@
-import operator
+import sys
 
-T = int(input())
+T = int(sys.stdin.readline())
 
-word_ary = {}
+word_ary = []
 
 for i in range(T):
-    word = str(input())
+    word_ary.append(sys.stdin.readline().strip())
 
-    if word not in word_ary:
-        word_ary[word] = len(word)
-    else:
-        pass
-print(word_ary)
-word_ary = sorted(word_ary.items(), key=operator.itemgetter(1))
-print(word_ary)
+word_ary = list(set(word_ary))
+word_ary.sort() #알파벳 별 정렬
+word_ary.sort(key=len)  #길이별 정렬
 
-word_ary = dict(word_ary)
-N_ary = []
-for key, value in word_ary.items():
-    print(key, value)
+# 정렬 순서를 주의해야 되는데, 상위 조건 A와 하위 조건 B가 있으면
+# 먼저 B로 정렬을 한 후에 A로 정렬을 해야 원하는 결과를 얻을 수 있다.
+
+for i in word_ary:
+    print(i)
