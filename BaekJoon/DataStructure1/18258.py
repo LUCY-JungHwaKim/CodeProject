@@ -12,7 +12,7 @@ while N > 0:
         if len(N_stack) == 0:
             print(-1)
         else:
-            print(N_stack.popleft()) #제일 상위꺼 pop
+            print(N_stack.popleft()) #제일 앞에꺼 pop
     elif exe_str[0] == 'top':
         if len(N_stack) == 0:
             print(-1)
