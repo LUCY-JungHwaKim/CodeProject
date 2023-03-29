@@ -25,7 +25,6 @@ while True:
 
 
     for _ in range(4):
-        print('he')
         #cur_d = chng_d[cur_d]
         d = (d + 3) % 4
         nr, nc = r + dr[d], c + dc[d]
