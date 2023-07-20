@@ -22,7 +22,6 @@ go_cnt = 1 # 처음시작이니깐 1
 
 while True:
 
-
     dloc -= 1
 
     if dloc == -1:
