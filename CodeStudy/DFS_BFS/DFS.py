@@ -25,3 +25,13 @@ visited = [False] * 9 ## 방문 여부 리스트
 
 dfs(graph,1, visited)
 
+
+## 확인ㅇ용
+#
+# def dfs(graph, start, visited):
+#
+#     visited[start] = True
+#
+#     for i in graph[start]:
+#         if not visited[i]:
+#             dfs(graph, i, visited)
