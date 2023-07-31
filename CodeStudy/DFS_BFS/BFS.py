@@ -14,7 +14,7 @@ def bfs(graph, v, visited):
                 q.append(i) # 큐에 삽입하고
                 visited[i] = True # 방문 처리
                 
-
+                
 
 
 graph = [
