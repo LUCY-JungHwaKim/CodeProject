@@ -15,7 +15,7 @@ def dfs(x,y):
     if x>= n or x < 0 or y >= m or y <0:
         return False
     
-    if graph[x][y] == 0:
+    if graph[x][y] == 0: ## 얼음 틀인지 확인
         graph[x][y] = 1
         dfs(x-1, y)
         dfs(x+1, y)
