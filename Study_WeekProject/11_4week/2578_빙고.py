@@ -13,7 +13,7 @@ final_cnt = 0  ## 이동 횟수 카운팅
 tot_flag = 0
 check_flag = False
 
-for i in range(5):
+for i in range(5): ## 좌표 조절
     for j in range(5):
         x = n_lst[i][j] // 5
         y = n_lst[i][j] % 5
