@@ -18,7 +18,7 @@ def dfs(arr, lst, k):
 
 dfs(ary, [], 0)
 print(sum_chk)
-## 너무어렵다
+## 너무어렵다    
 ##백트래킹사용법
 ##https://www.youtube.com/watch?v=4EAg1Pmk3bw
 ## 코드참고 : https://seongonion.tistory.com/98
