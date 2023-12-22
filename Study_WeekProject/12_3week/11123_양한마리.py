@@ -35,18 +35,18 @@ def bfs(graph, x, y, xlen, ylen):
             if ary[i][nx][ny] == '#':
                 q.append((nx, ny))
                 ary[i][nx][ny] = '.'
-                rslt += 1
+                rslt += 1 ## 연결된 # 개수 카운팅
 
     return rslt
 
 totalcnt = []
 for i in range(n): ## n개 만큼의 양 그리드 확인
-    # q = deque()
-    # cnt = 0
+    # 양 한마리라도 있으면 하나의 개체로 봄
+    
     cnt = []
     for j in range(mkary[i][0]):
         for x in range(mkary[i][1]):
-            if ary[i][j][x] == '#':
+            if ary[i][j][x] == '#': ## #을 만나면 근처 #개수 세아리고, .으로 바꿔주기
                 cnt.append(bfs(ary[i], j, x, mkary[i][0], mkary[i][1]))
     totalcnt.append(cnt)
 
