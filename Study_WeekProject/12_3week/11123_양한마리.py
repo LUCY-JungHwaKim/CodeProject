@@ -42,7 +42,7 @@ def bfs(graph, x, y, xlen, ylen):
 totalcnt = []
 for i in range(n): ## n개 만큼의 양 그리드 확인
     # 양 한마리라도 있으면 하나의 개체로 봄
-    
+
     cnt = []
     for j in range(mkary[i][0]):
         for x in range(mkary[i][1]):
