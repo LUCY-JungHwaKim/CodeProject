@@ -19,7 +19,7 @@ def dfs(idx, sol, finary):
         finary.append(sum(maxary)) ## 경우의 수별 합 구하기
         # print(finary)
     else: ## 이 조건 필수! 안그러면 시간 초과 남
-            
+
         return
 
 
