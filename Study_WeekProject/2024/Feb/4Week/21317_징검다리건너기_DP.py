@@ -1,42 +1,31 @@
-n = int(input())
+import sys
+input = sys.stdin.readline
 
-ary = [[0, 0] for _ in range(n + 1)]
+N = int(input())
+stone = []
 
-for i in range(n - 1):
-    a, b = map(int, input().split())
-    ary[i + 1][0], ary[i + 1][1] = a, b
-# print(ary)
-k = int(input())
+# dp 배열 생성
+dp = [1e9]*N
+dp[0] = 0
+for i in range(N-1):
+    s, b = map(int, input().split())
+    stone.append((s, b))
+    if i+1<N : dp[i+1] = min(dp[i+1], dp[i]+s)
+    if i+2<N : dp[i+2] = min(dp[i+2], dp[i]+b)
 
-dp = [[0, 0] for _ in range(n + 1)]
-## 최대 점프 때문에 두개 만들어줘야함!
-## 첫번째는 최대점프 안할 때, 두번째는 최대점프 할 떄!
-
-
-jumpflag = 0  # 매우 큰 점프는 한번만 할 수 있댔음
-
-if n >= 2:
-    dp[2][0] = ary[1][0]
-
-if n >= 3:
-    dp[2][0] = ary[1][0]
-    dp[3][0] = min(dp[2][0] + ary[2][0], ary[1][1])
-## 썼다 안썼다 하는 경우를 확인해봐야할것같음...
-
-if n >= 4: ## 4이상인 것부터 매우 큰 점프를 할 수 있음
-    for i in range(4, n + 1):
-
-        dp[i][0] = min(dp[i - 1][0] + ary[i - 1][0], dp[i - 2][0] + ary[i - 2][1]) ## 큰 점프 안할때
-        
-        ## 큰 점프 할 때, i마다 다름
-        if i == 4:
-            dp[i][1] = k
-        elif i == 5:
-            dp[i][1] = min(dp[i - 3][0] + k, ary[i-1][0] + k)
-        else:
-            dp[i][1] = min(dp[i-3][0]+k, dp[i-4][0] + k + ary[i-1][0], dp[i-5][0] + k + ary[i-2][1])
-# print(dp)
-if n <= 3:
-    print(dp[n][0])
-else:
-    print(min(dp[n][0], dp[n][1]))
+# 매우 큰 점프 적용해보며 최솟값 찾기
+K = int(input())
+_min = dp[-1]
+#print(_min, dp)
+for i in range(3, N):
+    e, dp1, dp2 = dp[i-3]+K, 1e9, 1e9
+    #print(e)
+    for j in range(i, N-1):
+        if i+1<=N : dp1 = min(dp1, e+stone[j][0])
+        if i+2<=N : dp2 = min(dp2, e+stone[j][1])
+        e, dp1, dp2 = dp1, dp2, 1e9
+    _min = min(_min, e)
+### 알다가도 모르ㅅ다게
+## https://ddiyeon.tistory.com/55
+## https://lighter.tistory.com/103
+print(_min)
