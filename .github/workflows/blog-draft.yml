@@ -4,7 +4,7 @@ name: Generate Tistory Blog Draft
 # 필요하면 branches 목록을 원하는 브랜치명으로 바꿔주세요.
 on:
   push:
-    branches: [ main, mater ]
+    branches: [ main, master ]
 
 # 초안 파일을 저장소에 다시 커밋(push)하기 위해 쓰기 권한이 필요합니다.
 permissions:
