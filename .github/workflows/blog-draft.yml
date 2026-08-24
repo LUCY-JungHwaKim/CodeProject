@@ -1,12 +1,9 @@
 name: Generate Tistory Blog Draft
 
-# main 브랜치에 push될 때마다 실행됩니다.
-# 필요하면 branches 목록을 원하는 브랜치명으로 바꿔주세요.
 on:
   push:
     branches: [ main, master ]
 
-# 초안 파일을 저장소에 다시 커밋(push)하기 위해 쓰기 권한이 필요합니다.
 permissions:
   contents: write
 
@@ -17,8 +14,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          # 직전 커밋과 비교(git diff)하기 위해 최소 2개의 커밋 이력이 필요합니다.
-          fetch-depth: 2
+          # merge commit 등 복잡한 히스토리도 안전하게 diff하기 위해 전체 히스토리를 받습니다.
+          fetch-depth: 0
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -29,14 +26,19 @@ jobs:
         run: pip install requests beautifulsoup4
 
       - name: Get changed files in this push
-        id: changed
         run: |
-          # 첫 커밋이라 HEAD~1이 없을 수도 있으니 예외 처리
-          if git rev-parse HEAD~1 >/dev/null 2>&1; then
-            git diff --name-only HEAD~1 HEAD > changed_files.txt
+          # github.event.before / github.event.after 는 이번 push로 실제로
+          # 바뀐 범위를 GitHub이 직접 알려주는 값이라 merge commit이 있어도 정확합니다.
+          BEFORE="${{ github.event.before }}"
+          AFTER="${{ github.event.after }}"
+
+          if [ "$BEFORE" = "0000000000000000000000000000000000000000" ] || [ -z "$BEFORE" ]; then
+            # 새 브랜치로의 첫 push인 경우
+            git diff --name-only "$(git hash-object -t tree /dev/null)" "$AFTER" > changed_files.txt
           else
-            git diff --name-only $(git hash-object -t tree /dev/null) HEAD > changed_files.txt
+            git diff --name-only "$BEFORE" "$AFTER" > changed_files.txt
           fi
+
           echo "----- changed files -----"
           cat changed_files.txt
 
@@ -48,12 +50,9 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add blog-drafts/
-          # 변경된 내용이 없으면 커밋하지 않고 정상 종료
           if git diff --cached --quiet; then
             echo "새로 생성된 초안이 없습니다."
             exit 0
           fi
-          # [skip ci] 를 커밋 메시지에 넣으면 이 커밋이 다시 워크플로우를
-          # 트리거해서 무한 루프에 빠지는 것을 GitHub Actions가 자동으로 막아줍니다.
           git commit -m "docs: 자동 생성된 티스토리 블로그 초안 추가 [skip ci]"
           git push
