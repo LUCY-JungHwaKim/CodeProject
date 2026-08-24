@@ -27,8 +27,11 @@ jobs:
 
       - name: Get changed files in this push
         run: |
+          git config core.quotepath false
+
           # github.event.before / github.event.after 는 이번 push로 실제로
           # 바뀐 범위를 GitHub이 직접 알려주는 값이라 merge commit이 있어도 정확합니다.
+
           BEFORE="${{ github.event.before }}"
           AFTER="${{ github.event.after }}"
 
