@@ -411,14 +411,12 @@ def build_markdown(
     source_path: str,
     ai_analysis: str | None,
 ):
-
     platform_info = PLATFORMS.get(
         platform,
         PLATFORMS["unknown"],
     )
 
     platform_label = platform_info["label"]
-
     url_template = platform_info["url_template"]
 
     if url_template:
@@ -451,22 +449,118 @@ def build_markdown(
     if not ai_analysis:
         ai_analysis = build_fallback_analysis()
 
-    return f"""# [{platform_label} {number}] {title} 풀이
+    markdown = (
+        f"# [{platform_label} {number}] {title} 풀이\n\n"
+        f"{link_line}\n"
+        f"- 사용 언어: {language}\n"
+        f"- 원본 코드: `{source_path}`\n"
+        f"- 생성일: {today}\n"
+        f"{platform_note}\n"
+        "## 문제 설명\n\n"
+        f"> {title}\n"
+        ">\n"
+        "> 자세한 문제 설명과 제약 조건은 위 문제 링크를 참고한다.\n\n"
+        f"{ai_analysis}\n\n"
+        "## 코드\n\n"
+        f"```{language}\n"
+        f"{code}\n"
+        "```\n\n"
+        "---\n\n"
+        "*이 글은 풀이 코드가 push될 때 자동 생성된 초안이다. "
+        "게시 전 내용을 한 번 확인한다.*\n"
+    )
 
-{link_line}
-- 사용 언어: {language}
-- 원본 코드: `{source_path}`
-- 생성일: {today}
-{platform_note}
-## 문제 설명
+    return markdown
 
-> {title}
->
-> 자세한 문제 설명과 제약 조건은 위 문제 링크를 참고한다.
+# --------------------------------------------------
+# main
+# --------------------------------------------------
 
-{ai_analysis}
+def main():
+    if len(sys.argv) < 2:
+        print("사용법: python analyze_solution.py changed_files.txt")
+        sys.exit(1)
 
-## 코드
+    changed_files_path = sys.argv[1]
 
-```{language}
-{code}
+    with open(changed_files_path, encoding="utf-8") as file:
+        changed_files = [
+            line.strip()
+            for line in file
+            if line.strip()
+        ]
+
+    print(f"[INFO] 변경 파일 {len(changed_files)}개 감지")
+
+    os.makedirs("blog-drafts", exist_ok=True)
+    generated = []
+
+    for filepath in changed_files:
+        print(f"[CHECK] {filepath}")
+
+        if filepath.startswith("blog-drafts/"):
+            print("[SKIP] blog-drafts 파일")
+            continue
+
+        if not os.path.exists(filepath):
+            print(f"[SKIP] 파일이 존재하지 않음: {filepath}")
+            continue
+
+        ext = os.path.splitext(filepath)[1].lower()
+
+        if ext not in EXT_LANG:
+            print(f"[SKIP] 지원하지 않는 확장자: {ext}")
+            continue
+
+        with open(filepath, encoding="utf-8", errors="ignore") as file:
+            content = file.read()
+
+        platform, number = detect_platform_and_number(filepath, content)
+
+        if not number:
+            print(f"[SKIP] {filepath}: 문제 번호를 찾을 수 없습니다.")
+            continue
+
+        language = EXT_LANG[ext]
+        title = fetch_problem_title(platform, number) or f"{number}번 문제"
+
+        print(f"[INFO] 문제 감지: {platform} / {number} / {title}")
+
+        ai_analysis = analyze_with_openai(
+            platform,
+            number,
+            title,
+            content,
+        )
+
+        markdown = build_markdown(
+            platform=platform,
+            number=number,
+            title=title,
+            language=language,
+            code=content,
+            source_path=filepath,
+            ai_analysis=ai_analysis,
+        )
+
+        output_path = f"blog-drafts/{platform}-{number}.md"
+
+        with open(output_path, "w", encoding="utf-8") as file:
+            file.write(markdown)
+
+        generated.append(output_path)
+        print(f"[OK] {output_path} 생성 완료")
+
+    if not generated:
+        print("생성된 초안이 없습니다. (이번 push에서 분석 가능한 풀이 파일 없음)")
+        return
+
+    print()
+    print("===== 생성 완료 =====")
+
+    for path in generated:
+        print(path)
+
+
+if __name__ == "__main__":
+    main()
