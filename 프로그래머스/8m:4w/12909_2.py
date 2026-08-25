@@ -8,6 +8,7 @@ def solution(s):
 
     queue = deque()
     cur_s = ""
+    cur_b = ""
 
     for idx, i in enumerate(list(s)):
         if (i == ")") & (idx == 0):

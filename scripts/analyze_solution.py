@@ -1,25 +1,20 @@
 #!/usr/bin/env python3
+
 """
-push된 풀이 코드를 분석해서 티스토리에 올릴 블로그 글 초안(.md)을
-자동 생성하는 스크립트.
+Push된 코딩테스트 풀이 코드를 분석하여
+티스토리에 올릴 Markdown 블로그 초안을 자동 생성합니다.
 
-v2: 백준(BOJ) + 프로그래머스(Programmers) 둘 다 지원.
-    (2026.04.28 BOJ 서비스 종료 이후 프로그래머스 지원 추가)
+지원 플랫폼
+- 프로그래머스
+- 백준
 
-- LLM을 쓰지 않는 "템플릿 + 정규식 기반" 분석기입니다.
-- 문제 번호/플랫폼은 아래 순서로 찾습니다 (우선순위 순):
-    1) 코드 안에 문제 URL이 그대로 있는 경우 (가장 정확)
-       예: https://school.programmers.co.kr/learn/courses/30/lessons/12909
-       예: https://www.acmicpc.net/problem/1926
-    2) 코드 상단 주석에 "백준"/"BOJ" 또는 "프로그래머스"/"programmers" + 숫자가 있는 경우
-       예: # 프로그래머스 12909, // BOJ 1926
-    3) 파일명이 숫자인 경우 (예: 1926.py) — 이 경우 플랫폼을 확정할 수 없어 'unknown' 처리
-- 문제 제목은 각 플랫폼 사이트에서 크롤링합니다 (실패 시 "{번호}번 문제"로 대체).
-- 사용된 알고리즘 패턴은 정규식으로 "추정"만 합니다. 실제 풀이 설명(접근 방법/회고)은
-  사람이 직접 채우도록 TODO로 남겨둡니다.
-
-사용법:
-    python scripts/analyze_solution.py changed_files.txt
+동작 과정
+1. push된 파일 목록 확인
+2. 문제 플랫폼 / 번호 감지
+3. 문제 제목 가져오기
+4. OpenAI API로 실제 풀이 코드 분석
+5. 접근 방법 / 시간복잡도 / 회고 작성
+6. blog-drafts/*.md 생성
 """
 
 import os
@@ -27,13 +22,14 @@ import re
 import sys
 from datetime import datetime, timezone
 
-try:
-    import requests
-    from bs4 import BeautifulSoup
-except ImportError:
-    requests = None
-    BeautifulSoup = None
+import requests
+from bs4 import BeautifulSoup
+from openai import OpenAI
 
+
+# --------------------------------------------------
+# 지원 언어
+# --------------------------------------------------
 
 EXT_LANG = {
     ".py": "python",
@@ -49,6 +45,11 @@ EXT_LANG = {
     ".rs": "rust",
 }
 
+
+# --------------------------------------------------
+# 플랫폼 정보
+# --------------------------------------------------
+
 PLATFORMS = {
     "baekjoon": {
         "label": "백준",
@@ -56,7 +57,10 @@ PLATFORMS = {
     },
     "programmers": {
         "label": "프로그래머스",
-        "url_template": "https://school.programmers.co.kr/learn/courses/30/lessons/{num}",
+        "url_template": (
+            "https://school.programmers.co.kr/"
+            "learn/courses/30/lessons/{num}"
+        ),
     },
     "unknown": {
         "label": "미확인 플랫폼",
@@ -64,129 +68,393 @@ PLATFORMS = {
     },
 }
 
-# (태그, 정규식, 사람이 읽을 설명 문장)
-PATTERNS = [
-    ("BFS", r"\b(bfs|deque|Queue\(\))\b", "BFS(너비 우선 탐색)를 활용하는 것으로 보입니다."),
-    ("DFS", r"\b(dfs|visited)\b", "DFS(깊이 우선 탐색) 혹은 방문 배열을 활용하는 탐색 문제로 보입니다."),
-    ("DP", r"\b(dp\s*\[|memo)\b", "다이나믹 프로그래밍(DP) 기법을 사용한 것으로 보입니다."),
-    ("정렬", r"\b(sort|sorted|Arrays\.sort)\b", "정렬을 활용하는 문제로 보입니다."),
-    ("이분탐색", r"\b(bisect|lower_bound|upper_bound)\b|\bmid\s*=", "이분 탐색(Binary Search)을 사용한 것으로 보입니다."),
-    ("우선순위큐", r"\b(heapq|PriorityQueue|priority_queue)\b", "우선순위 큐(힙)를 활용한 것으로 보입니다."),
-    ("유니온파인드", r"\b(find_parent|union\(|parent\[)\b", "유니온 파인드(Union-Find) 구조를 사용한 것으로 보입니다."),
-    ("백트래킹", r"\b(backtrack|permutations|combinations)\b", "백트래킹/완전탐색 기법을 사용한 것으로 보입니다."),
-    ("그래프", r"\b(graph\[|adj\[|adjacency)\b", "그래프 자료구조를 활용하는 문제로 보입니다."),
-    ("투포인터", r"\b(left|start)\b[\s\S]{0,60}\b(right|end)\b", "투 포인터(Two Pointer) 기법을 사용했을 가능성이 있습니다."),
-    ("스택/큐", r"\b(stack|deque|append\(.+\)\s*\n.+pop)\b", "스택 또는 큐 자료구조를 활용하는 것으로 보입니다."),
-]
 
+# --------------------------------------------------
+# 플랫폼 / 문제 번호 감지
+# --------------------------------------------------
 
 def detect_platform_and_number(filepath: str, content: str):
-    """(platform_key, number) 튜플을 반환. 못 찾으면 (None, None)."""
+    """
+    플랫폼과 문제 번호를 찾아
+    (platform, number) 형태로 반환합니다.
+    """
 
-    # 1) 코드 안에 문제 URL이 그대로 있는 경우 - 가장 신뢰도 높음
-    m = re.search(r"programmers\.co\.kr/learn/courses/30/lessons/(\d+)", content)
-    if m:
-        return "programmers", m.group(1)
+    # 1. 코드 안에 프로그래머스 URL이 있는 경우
+    match = re.search(
+        r"programmers\.co\.kr/learn/courses/30/lessons/(\d+)",
+        content,
+    )
 
-    m = re.search(r"acmicpc\.net/problem/(\d+)", content)
-    if m:
-        return "baekjoon", m.group(1)
+    if match:
+        return "programmers", match.group(1)
 
-    # 2) 코드 상단 15줄 안의 주석 키워드 + 숫자
+    # 2. 코드 안에 백준 URL이 있는 경우
+    match = re.search(
+        r"acmicpc\.net/problem/(\d+)",
+        content,
+    )
+
+    if match:
+        return "baekjoon", match.group(1)
+
+    # 3. 코드 상단 주석 확인
     header = "\n".join(content.splitlines()[:15])
 
-    m = re.search(r"(?:프로그래머스|programmers)\D{0,10}(\d{3,7})", header, re.IGNORECASE)
-    if m:
-        return "programmers", m.group(1)
+    match = re.search(
+        r"(?:프로그래머스|programmers)\D{0,10}(\d{3,7})",
+        header,
+        re.IGNORECASE,
+    )
 
-    m = re.search(r"(?:백준|BOJ|boj)\D{0,10}(\d{3,7})", header, re.IGNORECASE)
-    if m:
-        return "baekjoon", m.group(1)
+    if match:
+        return "programmers", match.group(1)
 
-    # 3) 파일명이 숫자인 경우 - 플랫폼은 알 수 없음
-    stem = os.path.splitext(os.path.basename(filepath))[0]
+    match = re.search(
+        r"(?:백준|BOJ)\D{0,10}(\d{3,7})",
+        header,
+        re.IGNORECASE,
+    )
+
+    if match:
+        return "baekjoon", match.group(1)
+
+    # 4. 파일명에서 문제 번호 탐색
+    filename = os.path.basename(filepath)
+    stem = os.path.splitext(filename)[0]
+
     if re.fullmatch(r"\d{3,7}", stem):
         return "unknown", stem
 
-    m = re.search(r"(\d{3,7})", stem)
-    if m:
-        return "unknown", m.group(1)
+    match = re.search(r"(\d{3,7})", stem)
+
+    if match:
+        return "unknown", match.group(1)
+
+    # 5. 전체 경로에서도 숫자 탐색
+    # 예: 프로그래머스/12909/solution.py
+    path_numbers = re.findall(r"(?<!\d)(\d{3,7})(?!\d)", filepath)
+
+    if path_numbers:
+        return "unknown", path_numbers[-1]
 
     return None, None
 
 
-def fetch_problem_title(platform: str, number: str):
-    if requests is None or BeautifulSoup is None:
-        return None
+# --------------------------------------------------
+# 문제 제목 가져오기
+# --------------------------------------------------
 
-    headers = {"User-Agent": "Mozilla/5.0 (compatible; blog-draft-bot)"}
+def fetch_problem_title(platform: str, number: str):
+    """
+    프로그래머스 / 백준 사이트에서 문제 제목을 가져옵니다.
+    실패하면 None을 반환합니다.
+    """
+
+    headers = {
+        "User-Agent": (
+            "Mozilla/5.0 "
+            "(compatible; coding-blog-draft-bot/1.0)"
+        )
+    }
 
     try:
+
         if platform == "baekjoon":
-            resp = requests.get(
-                f"https://www.acmicpc.net/problem/{number}", timeout=5, headers=headers
+
+            url = f"https://www.acmicpc.net/problem/{number}"
+
+            response = requests.get(
+                url,
+                timeout=5,
+                headers=headers,
             )
-            resp.raise_for_status()
-            soup = BeautifulSoup(resp.text, "html.parser")
+
+            response.raise_for_status()
+
+            soup = BeautifulSoup(
+                response.text,
+                "html.parser",
+            )
+
             title_tag = soup.select_one("#problem_title")
+
             if title_tag:
                 return title_tag.get_text(strip=True)
 
         elif platform == "programmers":
-            resp = requests.get(
-                f"https://school.programmers.co.kr/learn/courses/30/lessons/{number}",
+
+            url = (
+                "https://school.programmers.co.kr/"
+                f"learn/courses/30/lessons/{number}"
+            )
+
+            response = requests.get(
+                url,
                 timeout=5,
                 headers=headers,
             )
-            resp.raise_for_status()
-            soup = BeautifulSoup(resp.text, "html.parser")
-            if soup.title and soup.title.string:
-                # <title>코딩테스트 연습 - 올바른 괄호 | 프로그래머스 스쿨</title>
-                raw = soup.title.string.strip()
-                m = re.search(r"-\s*(.+?)\s*\|", raw)
-                if m:
-                    return m.group(1).strip()
-                return raw
 
-    except Exception as e:  # noqa: BLE001
-        print(f"[WARN] {platform} {number}번 문제 제목을 가져오지 못했습니다: {e}")
+            response.raise_for_status()
+
+            soup = BeautifulSoup(
+                response.text,
+                "html.parser",
+            )
+
+            if soup.title and soup.title.string:
+
+                raw_title = soup.title.string.strip()
+
+                # 예:
+                # 코딩테스트 연습 - 올바른 괄호 | 프로그래머스 스쿨
+                match = re.search(
+                    r"-\s*(.+?)\s*\|",
+                    raw_title,
+                )
+
+                if match:
+                    return match.group(1).strip()
+
+                return raw_title
+
+    except Exception as error:
+
+        print(
+            f"[WARN] {platform} {number} 문제 제목 "
+            f"가져오기 실패: {error}"
+        )
 
     return None
 
 
-def detect_patterns(content: str):
-    found = []
-    for name, pattern, desc in PATTERNS:
-        if re.search(pattern, content, re.IGNORECASE):
-            found.append((name, desc))
-    return found[:5]  # 너무 많이 잡히면 노이즈이므로 상위 5개만
+# --------------------------------------------------
+# OpenAI API 분석
+# --------------------------------------------------
+
+def analyze_with_openai(
+    platform: str,
+    number: str,
+    title: str,
+    code: str,
+):
+    """
+    실제 풀이 코드를 OpenAI API에 전달하여
+    접근 방법 / 시간복잡도 / 회고를 작성합니다.
+    """
+
+    api_key = os.getenv("OPENAI_API_KEY")
+
+    if not api_key:
+        print(
+            "[WARN] OPENAI_API_KEY가 없습니다. "
+            "AI 분석을 건너뜁니다."
+        )
+        return None
+
+    client = OpenAI(api_key=api_key)
+
+    platform_label = PLATFORMS.get(
+        platform,
+        PLATFORMS["unknown"],
+    )["label"]
+
+    prompt = f"""
+너는 코딩테스트 풀이를 분석해 개발 블로그 초안을 작성하는 도우미다.
+
+아래 코드는 사용자가 실제로 작성한 풀이 코드다.
+
+코드를 정확하게 읽고,
+코드에 실제로 존재하는 로직만 근거로 설명해야 한다.
+
+사용자가 하지 않은 생각이나 시행착오를 만들어내면 안 된다.
+
+예를 들어 코드에 deque가 있다고 해서 무조건 BFS라고 판단하는 식의
+단순 패턴 추측을 하지 말고 실제 제어 흐름과 자료구조 사용 목적을 분석한다.
+
+문제 정보
+
+- 플랫폼: {platform_label}
+- 문제 번호: {number}
+- 문제 제목: {title}
+
+사용자가 작성한 코드:
+
+--- CODE START ---
+
+{code}
+
+--- CODE END ---
 
 
-def build_markdown(platform, number, title, language, code, tags, source_path):
-    platform_info = PLATFORMS.get(platform, PLATFORMS["unknown"])
+다음 세 개의 Markdown 섹션을 반드시 작성한다.
+
+
+## 접근 방법
+
+실제 코드가 문제를 어떤 방식으로 해결하는지 설명한다.
+
+다음 내용을 자연스러운 블로그 글 형태로 작성한다.
+
+- 핵심 아이디어
+- 사용한 알고리즘 또는 자료구조
+- 코드가 어떤 순서로 동작하는지
+
+코드에서 확인할 수 없는 사용자의 생각이나 시행착오는
+절대로 만들어내지 않는다.
+
+
+## 시간복잡도
+
+다음 내용을 작성한다.
+
+- 시간복잡도
+- 공간복잡도
+- 각각 그렇게 판단한 이유
+
+Big-O 표기법을 사용한다.
+
+
+## 회고
+
+단순히 "좋은 문제였다" 같은 일반적인 내용은 작성하지 않는다.
+
+실제 코드를 기반으로 다음 내용을 분석한다.
+
+- 이 풀이에서 배울 수 있는 점
+- 불필요하거나 복잡하게 작성된 부분
+- 놓친 예외 케이스
+- 논리 오류 가능성
+- 더 단순하거나 안전하게 작성할 수 있는 방법
+
+특히 현재 코드가 특정 입력에서 잘못된 결과를 반환할 가능성이 있다면
+반드시 구체적인 예시를 들어 설명한다.
+
+단, 정답 코드를 새로 작성하지는 않는다.
+
+
+작성 규칙
+
+- 한국어로 작성한다.
+- 개발자가 직접 정리한 블로그 글처럼 자연스럽게 쓴다.
+- 지나치게 장황하게 작성하지 않는다.
+- 존댓말을 사용하지 않는다.
+- "사용자는"이라는 표현을 사용하지 않는다.
+- "AI가 분석한 결과" 같은 표현을 사용하지 않는다.
+- 전체 결과를 코드 블록(```)으로 감싸지 않는다.
+- 반드시 아래 세 제목만 출력한다.
+
+## 접근 방법
+## 시간복잡도
+## 회고
+"""
+
+    try:
+
+        print(
+            f"[AI] {platform_label} {number} "
+            f"'{title}' 코드 분석 요청"
+        )
+
+        response = client.responses.create(
+            model="gpt-5-mini",
+            input=prompt,
+        )
+
+        analysis = response.output_text.strip()
+
+        if not analysis:
+            print("[WARN] AI 분석 결과가 비어 있습니다.")
+            return None
+
+        print("[AI] 코드 분석 완료")
+
+        return analysis
+
+    except Exception as error:
+
+        print(
+            f"[WARN] OpenAI API 분석 실패: {error}"
+        )
+
+        return None
+
+
+# --------------------------------------------------
+# AI 호출 실패 시 TODO
+# --------------------------------------------------
+
+def build_fallback_analysis():
+
+    return """## 접근 방법
+
+**TODO:** 문제를 어떻게 접근했는지 작성해주세요.
+
+## 시간복잡도
+
+**TODO:** 시간복잡도와 공간복잡도를 작성해주세요.
+
+## 회고
+
+**TODO:** 풀면서 배운 점이나 개선할 부분을 작성해주세요."""
+
+
+# --------------------------------------------------
+# Markdown 생성
+# --------------------------------------------------
+
+def build_markdown(
+    platform: str,
+    number: str,
+    title: str,
+    language: str,
+    code: str,
+    source_path: str,
+    ai_analysis: str | None,
+):
+
+    platform_info = PLATFORMS.get(
+        platform,
+        PLATFORMS["unknown"],
+    )
+
     platform_label = platform_info["label"]
-    url = platform_info["url_template"].format(num=number) if platform_info["url_template"] else None
 
-    tag_names = ", ".join(t[0] for t in tags) if tags else "미분류"
-    tag_bullets = (
-        "\n".join(f"- {desc}" for _, desc in tags)
-        if tags
-        else "- 자동으로 감지된 패턴이 없습니다. 직접 유형을 적어주세요."
-    )
-    today = datetime.now(timezone.utc).astimezone().strftime("%Y-%m-%d")
+    url_template = platform_info["url_template"]
 
-    link_line = f"- 문제 링크: {url}" if url else (
-        "- 문제 링크: **TODO** (플랫폼을 자동으로 판별하지 못했습니다. "
-        "파일 상단에 `# 프로그래머스 12909` 또는 `# 백준 1926` 형식의 주석을 추가하면 "
-        "다음 push부터 자동으로 채워집니다.)"
+    if url_template:
+        url = url_template.format(num=number)
+    else:
+        url = None
+
+    today = (
+        datetime.now(timezone.utc)
+        .astimezone()
+        .strftime("%Y-%m-%d")
     )
-    platform_note = "" if platform != "unknown" else "\n> ⚠️ 이 문제의 출처 플랫폼을 자동으로 판별하지 못했습니다. 위 TODO를 참고해 코드에 주석을 추가해주세요.\n"
+
+    if url:
+        link_line = f"- 문제 링크: {url}"
+    else:
+        link_line = (
+            "- 문제 링크: **TODO** "
+            "(플랫폼을 자동으로 판별하지 못했습니다.)"
+        )
+
+    platform_note = ""
+
+    if platform == "unknown":
+        platform_note = (
+            "\n> ⚠️ 문제 번호는 찾았지만 플랫폼을 "
+            "자동으로 판별하지 못했습니다.\n"
+        )
+
+    if not ai_analysis:
+        ai_analysis = build_fallback_analysis()
 
     return f"""# [{platform_label} {number}] {title} 풀이
 
 {link_line}
 - 사용 언어: {language}
-- 예상 유형(자동 감지): {tag_names}
 - 원본 코드: `{source_path}`
 - 생성일: {today}
 {platform_note}
@@ -194,84 +462,11 @@ def build_markdown(platform, number, title, language, code, tags, source_path):
 
 > {title}
 >
-> (자세한 문제 설명 및 제약 조건은 위 링크를 참고해주세요.)
+> 자세한 문제 설명과 제약 조건은 위 문제 링크를 참고한다.
 
-## 접근 방법
-
-아래는 코드 패턴을 정규식으로 훑어 **추정**한 알고리즘 유형입니다.
-실제 풀이 논리와 다를 수 있으니 확인 후 자연어로 다듬어서 채워주세요.
-
-{tag_bullets}
-
-**TODO:** 문제를 어떻게 접근했는지, 핵심 아이디어와 시행착오를 여기에 직접 적어주세요.
-(예: 처음에 어떤 방법을 시도했다가 왜 실패했는지, 최종적으로 어떤 아이디어로 풀었는지)
+{ai_analysis}
 
 ## 코드
 
 ```{language}
 {code}
-```
-
-## 시간복잡도
-
-**TODO:** 시간/공간 복잡도를 적어주세요.
-
-## 회고
-
-**TODO:** 풀면서 배운 점, 실수했던 부분, 다음에 비슷한 문제를 만나면 어떻게 할지 적어주세요.
-
----
-*이 글은 push 시 자동으로 생성된 초안입니다. 티스토리에 올리기 전에 위 TODO 항목들을 채우고 자유롭게 다듬어주세요.*
-"""
-
-
-def main():
-    if len(sys.argv) < 2:
-        print("사용법: python analyze_solution.py <changed_files.txt>")
-        sys.exit(1)
-
-    changed_files_path = sys.argv[1]
-    with open(changed_files_path, encoding="utf-8") as f:
-        files = [line.strip() for line in f if line.strip()]
-
-    os.makedirs("blog-drafts", exist_ok=True)
-
-    generated = []
-
-    for filepath in files:
-        if filepath.startswith("blog-drafts/"):
-            continue
-        if not os.path.exists(filepath):
-            continue  # 삭제된 파일
-
-        ext = os.path.splitext(filepath)[1]
-        if ext not in EXT_LANG:
-            continue
-
-        with open(filepath, encoding="utf-8", errors="ignore") as f:
-            content = f.read()
-
-        platform, number = detect_platform_and_number(filepath, content)
-        if not number:
-            print(f"[SKIP] {filepath}: 문제 번호를 찾을 수 없습니다.")
-            continue
-
-        language = EXT_LANG[ext]
-        title = fetch_problem_title(platform, number) or f"{number}번 문제"
-        tags = detect_patterns(content)
-
-        md = build_markdown(platform, number, title, language, content, tags, filepath)
-
-        out_path = f"blog-drafts/{platform}-{number}.md"
-        with open(out_path, "w", encoding="utf-8") as f:
-            f.write(md)
-
-        generated.append(out_path)
-        print(f"[OK] {out_path} 생성됨 ({platform} {number}: {title})")
-
-    if not generated:
-        print("생성된 초안이 없습니다. (문제 번호를 인식할 수 있는 파일이 push되지 않음)")
-
-
-if __name__ == "__main__":
-    main()

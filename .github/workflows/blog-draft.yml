@@ -10,11 +10,11 @@ permissions:
 jobs:
   generate-draft:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          # merge commit 등 복잡한 히스토리도 안전하게 diff하기 위해 전체 히스토리를 받습니다.
           fetch-depth: 0
 
       - name: Set up Python
@@ -23,20 +23,17 @@ jobs:
           python-version: "3.11"
 
       - name: Install dependencies
-        run: pip install requests beautifulsoup4
+        run: pip install requests beautifulsoup4 openai
 
       - name: Get changed files in this push
         run: |
+          # 한글 파일/폴더명이 \355\224... 형태로 바뀌지 않도록 설정
           git config core.quotepath false
-
-          # github.event.before / github.event.after 는 이번 push로 실제로
-          # 바뀐 범위를 GitHub이 직접 알려주는 값이라 merge commit이 있어도 정확합니다.
 
           BEFORE="${{ github.event.before }}"
           AFTER="${{ github.event.after }}"
 
           if [ "$BEFORE" = "0000000000000000000000000000000000000000" ] || [ -z "$BEFORE" ]; then
-            # 새 브랜치로의 첫 push인 경우
             git diff --name-only "$(git hash-object -t tree /dev/null)" "$AFTER" > changed_files.txt
           else
             git diff --name-only "$BEFORE" "$AFTER" > changed_files.txt
@@ -46,16 +43,21 @@ jobs:
           cat changed_files.txt
 
       - name: Analyze code & generate blog draft(s)
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: python scripts/analyze_solution.py changed_files.txt
 
       - name: Commit generated drafts back to repo
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
+
           git add blog-drafts/
+
           if git diff --cached --quiet; then
             echo "새로 생성된 초안이 없습니다."
             exit 0
           fi
+
           git commit -m "docs: 자동 생성된 티스토리 블로그 초안 추가 [skip ci]"
           git push
