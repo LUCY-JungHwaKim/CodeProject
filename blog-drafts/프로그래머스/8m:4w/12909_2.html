@@ -1,0 +1,82 @@
+<div style="padding: 16px 20px; margin: 20px 0; background: #f7f7f8; border-radius: 10px; line-height: 1.8;">
+<b>🔗 문제</b> : <a href="https://school.programmers.co.kr/learn/courses/30/lessons/12909" target="_blank" rel="noopener noreferrer">프로그래머스 - 올바른 괄호</a><br>
+<b>💻 언어</b> : Python<br>
+<b>🏷️ 유형</b> : Stack / 문자열
+</div>
+
+<h2>💡 접근 방법</h2>
+<ul style="line-height: 1.9;"><li>문자열을 순회하면서 첫 문자가 &#x27;)&#x27;이면 즉시 False 반환</li><li>&#x27;(&#x27;을 만나면 deque에 추가하고 cur_s에 &#x27;(&#x27; 기록</li><li>&#x27;)&#x27;을 만나면 deque가 비어있지 않고 cur_s가 &#x27;(&#x27;일 때 pop으로 매칭 처리</li></ul>
+
+<h3>📌 핵심 아이디어</h3>
+<div style="padding: 16px 20px; margin: 16px 0; border-left: 4px solid #555; background: #f8f8f8; line-height: 1.8;">
+deque를 스택처럼 사용해 &#x27;(&#x27;을 쌓고 &#x27;)&#x27;가 나오면 pop으로 짝을 맞추는 방식임. cur_s로 직전 문자 상태를 확인함.
+</div>
+
+<h2>💻 코드</h2>
+<pre style="padding: 20px; overflow-x: auto; border-radius: 10px; background: #272822; color: #f8f8f2; line-height: 1.6;"><code>
+# https://school.programmers.co.kr/learn/courses/30/lessons/12909
+
+from collections import *
+
+
+def solution(s):
+    answer = True
+
+    queue = deque()
+    cur_s = &quot;&quot;
+
+    for idx, i in enumerate(list(s)):
+        if (i == &quot;)&quot;) &amp; (idx == 0):
+            return False
+        elif i == &quot;(&quot;:
+            queue.append(i)
+            cur_s = i
+        else:
+            if (len(queue) &gt; 0) &amp; (cur_s == &quot;(&quot;):
+                queue.pop()
+
+    if len(queue) == 0:
+        return True
+    else:
+        return False
+</code></pre>
+
+<h2>⏱️ 시간 · 공간 복잡도</h2>
+<div style="padding: 16px 20px; margin: 16px 0; background: #f7f7f8; border-radius: 10px; line-height: 1.8;">
+<p><b>시간복잡도 : O(N)</b></p>
+<ul><li>문자열을 한 번 순회하며 각 문자에 대해 상수 시간 연산만 수행함</li></ul>
+<p><b>공간복잡도 : O(N)</b></p>
+<ul><li>최악의 경우 모든 문자가 &#x27;(&#x27;이면 deque에 모두 저장되므로 추가 공간이 문자열 길이만큼 필요함</li></ul>
+</div>
+
+<h2>🔎 코드 리뷰</h2>
+<h3>잘 적용한 부분</h3>
+<ul style="line-height: 1.9;"><li>초기 &#x27;)&#x27;를 빠르게 판별하여 불필요한 연산을 줄임</li><li>deque를 사용해 push/pop이 O(1)로 동작하도록 구현함</li><li>최종적으로 스택이 비어있으면 올바른 괄호로 판단하는 간단한 종료 조건 사용</li></ul>
+
+<h3>⚠️ 확인이 필요한 부분</h3>
+<div style="padding: 16px 20px; margin: 16px 0; background: #fff8e6; border-left: 4px solid #e5a100; border-radius: 4px; line-height: 1.8;">
+<b>빈 스택에서 닫는 괄호를 만났을 때 False를 반환하지 않음</b>
+<br><br>
+코드가 &#x27;)&#x27;을 만났을 때 스택이 비어있으면 아무 동작도 하지 않으므로 추가적인 닫는 괄호를 무시하고 결과적으로 잘못된 문자열을 True로 반환할 수 있음
+<br><br>
+<b>반례 예시</b>
+<pre style="padding: 12px; background: #ffffff; border-radius: 6px; overflow-x: auto;"><code>())</code></pre>
+</div>
+<div style="padding: 16px 20px; margin: 16px 0; background: #fff8e6; border-left: 4px solid #e5a100; border-radius: 4px; line-height: 1.8;">
+<b>비트 연산자 &#x27;&amp;&#x27; 사용으로 가독성 및 잠재적 오류 가능성</b>
+<br><br>
+조건식에서 논리 연산에 and 대신 &amp;를 사용함. 현재는 불리언에 대해 동작하지만 가독성이 떨어지고 피연산자가 불리언이 아닐 경우 의도치 않은 동작 유발 가능함
+</div>
+<div style="padding: 16px 20px; margin: 16px 0; background: #fff8e6; border-left: 4px solid #e5a100; border-radius: 4px; line-height: 1.8;">
+<b>cur_s 변수의 불필요성 및 상태 관리 혼란</b>
+<br><br>
+cur_s는 &#x27;(&#x27;을 만났을 때만 갱신하고 pop 시 갱신하지 않아 상태가 불필요하거나 오해의 소지가 있음. 스택 자체의 존재 여부만으로 판단 가능함
+</div>
+<h3>🔧 개선 방향</h3>
+<ul style="line-height: 1.9;"><li>&#x27;)&#x27;를 처리할 때 스택이 비어있으면 즉시 False 반환하도록 수정</li><li>cur_s 변수를 제거하고 스택의 길이로만 매칭 판단하도록 간단화</li><li>조건문에 and를 사용하여 가독성 및 안전성 개선</li><li>list(s) 대신 문자열 직접 순회(for c in s)로 약간의 비용 절감 가능</li></ul>
+
+<h2>📝 회고</h2>
+<ul style="line-height: 1.9;"><li>괄호 매칭은 스택으로 처리하며 빈 스택에서 닫는 괄호를 바로 처리해야 함</li><li>불필요한 상태 변수를 도입하면 로직을 복잡하게 만들거나 오류 유발 가능함</li><li>파이썬에서 논리 연산자는 and/or를 사용하는 것이 명확함</li></ul>
+
+<hr style="margin: 40px 0;">
+<p style="font-size: 13px; color: #888;">풀이 코드를 기반으로 자동 생성한 초안입니다.</p>
